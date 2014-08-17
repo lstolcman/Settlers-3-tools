@@ -55,49 +55,102 @@ void read_image(uint32_t address, char* file_name)
 	uint8_t red;
 	uint32_t loc;
 
+	uint8_t pxCount;
+	int8_t dist;
+
 
 	fseek(file, address, 0);
 
 	fread(&x, sizeof(x), 1, file);
 	fread(&y, sizeof(y), 1, file);
-	//printf("x=%d,y=%d\n", x, y);
 	fread(&unknown, sizeof(unknown), 1, file);
-	fread(&unknown, sizeof(unknown), 1, file);
-	//printf("x=%d, y=%d\n", x, y);
 
 	loc=0;
-	char *mem = calloc(x*y, 3);
+	char *mem = calloc(x*y, 5);
 
-	for (unsigned j=0; j<y; ++j)
+	/*
+	   fread(&pxCount, sizeof(pxCount), 1, file);
+	   fread(&dist, sizeof(dist), 1, file);
+	   printf("%dx%d %s\n", x, y, file_name);
+	   printf("pxCnt=%d, dist=%d\n", pxCount, dist);
+
+	   for (unsigned j=0; j<y; ++j)
+	   {
+	   for (unsigned i=0; i<x; ++i)
+	   {
+	// Pixel is stored as uint16_t which is rgb565 format.
+	// that means subpixels are stored as below:
+	// |R|R|R|R|R|G|G|G|G|G|G|B|B|B|B|B|
+	// Red - 5 bits, Green - 6 bits, Blue - 5 bits
+	// here we use bitwise operations to extract these values
+
+	fread(&input, sizeof(input), 1, file);
+
+	blue = (input&0x1f) << 3;
+	green = (input&0x7e0) >> 3;
+	red = (input&0xf800) >> 8;
+
+	 *(mem+loc++) = blue;
+	 *(mem+loc++) = green;
+	 *(mem+loc++) = red;
+	 }
+	 if (j != y-1)
+	 {
+	 fread(&pxCount, sizeof(pxCount), 1, file);
+	 fread(&dist, sizeof(dist), 1, file);
+	 printf("pxCnt=%d, dist=%d\n", pxCount, dist);
+	 }
+	 }
+	 */
+
+	unsigned pixels = 0;
+	do//for (unsigned height=0; height<y*2; ++height)
 	{
-		for (unsigned i=0; i<x; ++i)
+		fread(&pxCount, sizeof(pxCount), 1, file);
+		fread(&dist, sizeof(dist), 1, file);
+		if (dist < 0) dist+=128;
+		//printf("pxCnt=%d, dist=%d\n", pxCount, dist);
+		//
+		/*
+		for (unsigned pixel=0; pixel<dist; ++pixel)
 		{
-			// Pixel is stored as uint16_t which is rgb565 format.
-			// that means subpixels are stored as below:
-			// |R|R|R|R|R|G|G|G|G|G|G|B|B|B|B|B|
-			// Red - 5 bits, Green - 6 bits, Blue - 5 bits
-			// here we use bitwise operations to extract these values
-
+			*(mem+loc++) = 0x00;
+			*(mem+loc++) = 0x00;
+			*(mem+loc++) = 0x00;
+			*(mem+loc++) = 0x00;
+			++pixels;
+		}
+*/
+		//loc += dist*3;
+		loc += dist*4; ///!!!!!!!!!!
+		pixels += dist;
+		for (unsigned pixel=0; pixel<pxCount; ++pixel)
+		{
 			fread(&input, sizeof(input), 1, file);
 
 			blue = (input&0x1f) << 3;
 			green = (input&0x7e0) >> 3;
 			red = (input&0xf800) >> 8;
 
+			*(mem+loc++) = 0xff;
 			*(mem+loc++) = blue;
 			*(mem+loc++) = green;
 			*(mem+loc++) = red;
+			++pixels;
 		}
-		if (j != y-1)
-			fread(&input, sizeof(unknown), 1, file);
+
+
 	}
-	write_bitmap_to_file(file_name, x, y, mem);
+	while (pixels < x*y);
+
+	write_rgba_bitmap_to_file(file_name, x, y, mem);
 
 	free(mem);
 }
 
 int main(int argc, char **argv)
 {
+
 	s3_dat_file_format file_data;
 
 	atexit(exit_exe);
@@ -151,22 +204,44 @@ int main(int argc, char **argv)
 	printf("%3d Unknown 2\n", file_data.unknown_header_2.count);
 
 
-	uint32_t c = 0;
+	uint32_t c;
+	uint32_t address;
+	c=0;
 	for (unsigned i=0; i<file_data.terrain_header.count; ++i)
 	{
-		uint32_t address;
 
 		fseek(file, file_data.main_header.terrain_ptr+8+i*4, 0);
 		fread(&address, sizeof(address), 1, file);
 		char file_name[16] = "";
 		strcat(file_name, my_itoa(i+1));
-		strcat(file_name, ".bmp");
+		strcat(file_name, "terr.bmp");
 		//printf("adres=%d\n", file_data.main_header.terrain_ptr);
 		//printf("adres=%d\n", address);
 		read_image(address, file_name);
 		++c;
 	}
 	printf("%d Terrains unpacked\n", c);
+
+
+
+	c=0;
+	for (unsigned i=0; i<file_data.gui_header.count; ++i)
+	{
+
+		fseek(file, file_data.main_header.gui_ptr+8+i*4, 0);
+		fread(&address, sizeof(address), 1, file);
+		char file_name[16] = "";
+		strcat(file_name, my_itoa(i+1));
+		strcat(file_name, "gui.bmp");
+		//printf("adres=%d\n", file_data.main_header.terrain_ptr);
+		//printf("adres=%d\n", address);
+		read_image(address, file_name);
+		printf("%d\r", c);
+		++c;
+		
+	}
+	printf("%d GUIs unpacked\n", c);
+
 
 
 
